@@ -230,3 +230,129 @@ Copyright &copy; 2015 dataArtisans. All Rights Reserved.
 
 Apache Flink, Apache, and the Apache feather logo are trademarks of The Apache Software Foundation.
 </center>
+Apache Flink™DataStream的演示应用程序
+该存储库包含Apache Flink的 DataStream API的演示应用程序。
+
+Apache Flink是一个可扩展的开源流数据流引擎，具有许多竞争功能。
+您可以在本页底部找到Flink功能列表。
+
+在IDE中运行演示应用程序
+您可以从IDE运行此存储库中的所有示例，并使用代码。
+要求：
+
+Java JDK 7（或8）
+Apache Maven 3.x
+混帐
+支持Scala的IDE（我们推荐使用IntelliJ IDEA）
+要在IDE中运行演示应用程序，请执行以下步骤：
+
+克隆存储库：打开终端并克隆存储库： git clone https://github.com/dataArtisans/flink-streaming-demo.git。请注意，存储库大小约为100MB，因为它包含我们的演示应用程序的输入数据。
+
+将项目导入IDE：存储库是Maven项目。打开IDE并将存储库导入为现有Maven项目。这通常通过选择包含pom.xml文件的文件夹或选择pom.xml文件本身来完成。
+
+启动演示应用程序：例如，执行其中一个演示应用程序的main()方法 com.dataartisans.flink_demo.examples.TotalArrivalCount.scala。运行应用程序将在IDE的JVM进程中启动本地Flink实例。您将看到Flink的日志消息以及由打印到标准输出的程序生成的输出。
+
+浏览Web仪表板：本地Flink实例启动一个为Flink仪表板提供服务的Web服务器。打开http：// localhost：8081以访问和浏览仪表板。
+
+演示应用程序
+出租车事件流
+在这个过程中存储库的所有演示应用程序是从起源乘坐出租车事件流的公共数据集 的的纽约市出租车和轿车委员会 （TLC）。该数据集包括2009年至2015年纽约市出租车旅行的记录。
+
+我们将这些数据中的一部分转换为出租车事件的数据集，将每个行程记录分成骑行开始和骑行结束事件。事件具有以下架构：
+
+rideId: Long // unique id for each ride
+time: DateTime // timestamp of the start/end event
+isStart: Boolean // true = ride start, false = ride end
+location: GeoPoint // lon/lat of pick-up/drop-off location
+passengerCnt: short // number of passengers
+travelDist: float // total travel distance, -1 on start events
+自定义SourceFunction服务DataStream[TaxiRide]来自此数据集。为了尽可能逼真地生成流，事件根据其时间戳发出。实际上相隔10分钟发生的两个事件相隔十分钟。可以指定加速因子以“快进”流，即，加速因子为2，事件将相隔五分钟服务。此外，您可以指定最大服务延迟，这会导致每个事件在绑定范围内随机延迟，以模拟无序流（延迟0秒会产生有序流）。所有示例都在事件时间模式下运行。即使在历史数据或无序传送的数据的情况下，这也可以保证一致的结果。
+
+确定热门位置
+该TotalArrivalCount.scala 计划确定了纽约市的热门地点。它摄取了出租车活动的流程，并计算每个地点乘出租车到达的人数。
+
+确定过去15分钟的热门位置
+该SlidingArrivalCount.scala 计划确定了过去15分钟的热门位置。它摄取出租车记录流并每五分钟计算在过去15分钟内到达每个位置的人数。这种类型的计算称为滑动窗口。
+
+计算热门地点的提前到达计数
+某些流处理用例取决于及时的事件聚合，例如发送通知或警报。该EarlyArrivalCount.scala 程序扩展了之前的滑动窗口应用程序。与之前相同，它每五分钟计算一次在过去15分钟内到达每个地点的人数。此外，每当有50人到达某个位置时，它会发出早期的部分计数，即如果超过50,100,150（等等）人员到达某个位置，则会发出更新的计数。
+
+设置Elasticsearch和Kibana
+此存储库中的演示应用程序准备将其输出写入Elasticsearch。使用Kibana可以轻松地将Elasticsearch中的数据可视化，以 进行实时监控和交互式分析。
+
+我们的演示应用程序依赖于Elasticsearch 1.7.3和Kibana 4.1.3。这两个系统都具有良好的开箱即用体验，并且可以根据我们的目的很好地运行其默认配置。
+
+按照以下说明设置Elasticsearch和Kibana。
+
+设置Elasticsearch
+在这里下载Elasticsearch 1.7.3 。
+
+提取下载的存档文件并输入解压缩的存储库。
+
+使用启动脚本启动Elasticsearch : ./bin/elasticsearch.
+
+创建索引（此处称为nyc-idx）：curl -XPUT "http://localhost:9200/nyc-idx"
+
+为索引创建模式映射（此处称为popular-locations）：
+
+curl -XPUT "http://localhost:9200/nyc-idx/_mapping/popular-locations" -d'
+{
+ "popular-locations" : {
+   "properties" : {
+     "cnt": {"type": "integer"},
+     "location": {"type": "geo_point"},
+     "time": {"type": "date"}
+   }
+ }
+}'
+注意：此映射可用于所有演示应用程序。
+
+配置演示应用程序以将其结果写入Elasticsearch。为此，您必须更改演示应用程序源代码中的相应参数：
+组 writeToElasticsearch = true
+设置elasticsearchHost为正确的主机名（请参阅Elasticsearch的日志输出）
+运行Flink程序将其结果写入Elasticsearch。
+要清除nyc-idxElasticsearch中的索引，只需删除映射， curl -XDELETE 'http://localhost:9200/nyc-idx/popular-locations'然后使用上一个命令再次创建它。
+
+设置Kibana
+设置Kibana并可视化存储在Elasticsearch中的数据也很容易。
+
+在这里下载 Kibana 4.1.3
+
+提取下载的存档并输入提取的存储库。
+
+使用启动脚本启动Kibana : ./bin/kibana.
+
+通过在浏览器中打开http：// localhost：5601来访问Kibana 。
+
+通过输入索引名称“nyc-idx”并单击“创建”来配置索引模式。不要取消选中“索引包含基于时间的事件”选项。
+
+单击页面顶部的“发现”按钮。Kibana将告诉您“未找到结果”，因为我们必须配置数据的时间范围以在Kibane中可视化。单击右上角的“最后15分钟”标签，输入2013-01-01至2013-01-06的绝对时间范围，这是我们的出租车数据流的时间范围。您还可以配置刷新间隔以重新加载页面以进行更新。
+
+单击页面顶部的“可视化”按钮，选择“平铺地图”，然后单击“从新搜索”。
+
+接下来，您需要配置切片贴图可视化：
+
+左上角：将显示的值配置为“cnt”字段上的“Sum”聚合。
+左上角：选择“地理坐标”作为铲斗类型，并确保将“位置”配置为字段。
+左上角：您可以通过单击“选项”（左上角）并选择例如“着色Geohash网格”可视化来更改可视化类型。
+通过单击绿色播放按钮启动可视化。
+以下屏幕截图显示了Kibana如何可视化结果TotalArrivalCount.scala。
+
+Kibana截图
+
+Apache Flink的功能集
+支持无序流和事件时间处理：实际上，事件流很少按照生成的顺序到达，尤其是来自分布式系统，设备和传感器的流。Flink 0.10是第一个支持无序流和事件时间的开源引擎，这是许多旨在获得一致且有意义的结果的应用程序的硬性要求。
+
+在Scala和Java的表现和易于使用的API：弗林克的的数据流中的API提供了很好的批量处理的API已知的，诸如许多运营商map，reduce以及join如以及流特定的操作window，split和connect。对用户定义函数的一流支持简化了自定义应用程序行为的实现。DataStream API在Scala和Java中可用。
+
+支持会话和未对齐窗口：大多数流式传输系统具有一些窗口化概念，即基于其时间戳的某些功能的事件的时间分组。不幸的是，在许多系统中，这些窗口都是硬编码的，并与系统的内部检查点机制相连。Flink是第一个完全将窗口与容错分离的开源流引擎，允许更丰富的窗口形式，例如会话。
+
+一致性，容错性和高可用性：Flink在出现故障时保证一致的操作员状态（通常称为“精确一次处理”），并在选定的源和接收器之间保持一致的数据移动（例如，Kafka和HDFS之间的一致数据移动） 。Flink还支持主故障转移，消除任何单点故障。
+
+高吞吐量和低延迟处理：我们为每个核心每秒150万个事件计时Flink，并且还在包含网络数据混洗的作业中观察到25毫秒范围内的延迟。使用调谐旋钮，Flink用户可以控制延迟 - 吞吐量权衡，使系统适用于高吞吐量数据摄取和转换，以及超低延迟（毫秒范围）应用。
+
+与许多数据输入和输出系统集成：Flink集成了各种用于数据输入和输出的开源系统（例如，HDFS，Kafka，Elasticsearch，HBase等），部署（例如，YARN），以及充当其他框架的执行引擎（例如，Cascading，Google Cloud Dataflow）。Flink项目本身捆绑了Hadoop MapReduce兼容层，Storm兼容层，以及用于机器学习和图形处理的库。
+
+支持批处理：在Flink中，批处理是流处理的一种特殊情况，因为有限数据源只是即将结束的流。Flink提供专用的批处理执行模式，使用专门的DataSet API和用于机器学习和图形处理的库。此外，Flink包含多个特定于批处理的优化（例如，用于调度，内存管理和查询优化），在批处理用例中匹配甚至超出专用批处理引擎。
+
+开发人员的工作效率和操作简便性：Flink可在各种环境中运行。IDE中的本地执行显着简化了Flink应用程序的开发和调试。在分布式设置中，Flink以大规模横向扩展运行。YARN模式允许用户在几秒钟内启动Flink集群。Flink通过定义良好的REST接口提供作业和整个系统的监控指标。内置Web仪表板显示这些指标，使Flink的监控非常方便。
